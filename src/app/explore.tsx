@@ -1,180 +1,124 @@
-import { Image } from 'expo-image';
-import { SymbolView } from 'expo-symbols';
-import { Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { ExternalLink } from '@/components/external-link';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Collapsible } from '@/components/ui/collapsible';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+const API_KEY = '32b85baedbf01b9b937a80e16aeaf84c';
 
-export default function TabTwoScreen() {
-  const safeAreaInsets = useSafeAreaInsets();
-  const insets = {
-    ...safeAreaInsets,
-    bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
+const getWeatherEmoji = (description) => {
+  if (description.includes('clear')) return '☀️';
+  if (description.includes('cloud')) return '⛅';
+  if (description.includes('rain')) return '🌧️';
+  if (description.includes('thunder')) return '⛈️';
+  if (description.includes('snow')) return '❄️';
+  if (description.includes('mist') || description.includes('fog')) return '🌫️';
+  return '🌤️';
+};
+
+export default function Explore() {
+  const [forecast, setForecast] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [city, setCity] = useState('');
+
+  const fetchForecast = async (cityName) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `https://api.openweathermap.org/data/2.5/forecast?q=${cityName}&appid=${API_KEY}&units=metric`
+      );
+      const data = await res.json();
+      if (data.cod !== '200') {
+        setError('Could not load forecast');
+      } else {
+        const daily = data.list.filter((_, index) => index % 8 === 0).slice(0, 5);
+        setForecast(daily);
+        setCity(cityName);
+      }
+    } catch {
+      setError('Something went wrong');
+    }
+    setLoading(false);
   };
-  const theme = useTheme();
 
-  const contentPlatformStyle = Platform.select({
-    android: {
-      paddingTop: insets.top,
-      paddingLeft: insets.left,
-      paddingRight: insets.right,
-      paddingBottom: insets.bottom,
-    },
-    web: {
-      paddingTop: Spacing.six,
-      paddingBottom: Spacing.four,
-    },
-  });
+  useFocusEffect(
+    useCallback(() => {
+      AsyncStorage.getItem('lastCity').then(saved => {
+        fetchForecast(saved || 'Mysuru');
+      });
+    }, [])
+  );
+
+  const getDayName = (dateStr) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  };
+
+  if (loading) return (
+    <View style={styles.center}>
+      <ActivityIndicator size="large" color="#fff" />
+      <Text style={styles.loadingText}>Loading forecast...</Text>
+    </View>
+  );
+
+  if (error) return (
+    <View style={styles.center}>
+      <Text style={styles.error}>{error}</Text>
+    </View>
+  );
 
   return (
-    <ScrollView
-      style={[styles.scrollView, { backgroundColor: theme.background }]}
-      contentInset={insets}
-      contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}>
-      <ThemedView style={styles.container}>
-        <ThemedView style={styles.titleContainer}>
-          <ThemedText type="subtitle">Explore</ThemedText>
-          <ThemedText style={styles.centerText} themeColor="textSecondary">
-            This starter app includes example{'\n'}code to help you get started.
-          </ThemedText>
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.title}>📅 5-Day Forecast</Text>
+      <Text style={styles.subtitle}>{city}</Text>
 
-          <ExternalLink href="https://docs.expo.dev" asChild>
-            <Pressable style={({ pressed }) => pressed && styles.pressed}>
-              <ThemedView type="backgroundElement" style={styles.linkButton}>
-                <ThemedText type="link">Expo documentation</ThemedText>
-                <SymbolView
-                  tintColor={theme.text}
-                  name={{ ios: 'arrow.up.right.square', android: 'link', web: 'link' }}
-                  size={12}
-                />
-              </ThemedView>
-            </Pressable>
-          </ExternalLink>
-        </ThemedView>
-
-        <ThemedView style={styles.sectionsWrapper}>
-          <Collapsible title="File-based routing">
-            <ThemedText type="small">
-              This app has two screens: <ThemedText type="code">src/app/index.tsx</ThemedText> and{' '}
-              <ThemedText type="code">src/app/explore.tsx</ThemedText>
-            </ThemedText>
-            <ThemedText type="small">
-              The layout file in <ThemedText type="code">src/app/_layout.tsx</ThemedText> sets up
-              the tab navigator.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/router/introduction">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-
-          <Collapsible title="Android, iOS, and web support">
-            <ThemedView type="backgroundElement" style={styles.collapsibleContent}>
-              <ThemedText type="small">
-                You can open this project on Android, iOS, and the web. To open the web version,
-                press <ThemedText type="smallBold">w</ThemedText> in the terminal running this
-                project.
-              </ThemedText>
-              <Image
-                source={require('@/assets/images/tutorial-web.png')}
-                style={styles.imageTutorial}
-              />
-            </ThemedView>
-          </Collapsible>
-
-          <Collapsible title="Images">
-            <ThemedText type="small">
-              For static images, you can use the <ThemedText type="code">@2x</ThemedText> and{' '}
-              <ThemedText type="code">@3x</ThemedText> suffixes to provide files for different
-              screen densities.
-            </ThemedText>
-            <Image source={require('@/assets/images/react-logo.png')} style={styles.imageReact} />
-            <ExternalLink href="https://reactnative.dev/docs/images">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-
-          <Collapsible title="Light and dark mode components">
-            <ThemedText type="small">
-              This template has light and dark mode support. The{' '}
-              <ThemedText type="code">useColorScheme()</ThemedText> hook lets you inspect what the
-              user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-
-          <Collapsible title="Animations">
-            <ThemedText type="small">
-              This template includes an example of an animated component. The{' '}
-              <ThemedText type="code">src/components/ui/collapsible.tsx</ThemedText> component uses
-              the powerful <ThemedText type="code">react-native-reanimated</ThemedText> library to
-              animate opening this hint.
-            </ThemedText>
-          </Collapsible>
-        </ThemedView>
-        {Platform.OS === 'web' && <WebBadge />}
-      </ThemedView>
+      {forecast.map((item, index) => (
+        <View key={index} style={styles.card}>
+          <View style={styles.cardLeft}>
+            <Text style={styles.emoji}>{getWeatherEmoji(item.weather[0].description)}</Text>
+            <View>
+              <Text style={styles.day}>{getDayName(item.dt_txt)}</Text>
+              <Text style={styles.desc}>{item.weather[0].description}</Text>
+            </View>
+          </View>
+          <View style={styles.cardRight}>
+            <Text style={styles.temp}>{Math.round(item.main.temp)}°C</Text>
+            <Text style={styles.minmax}>
+              {Math.round(item.main.temp_min)}° / {Math.round(item.main.temp_max)}°
+            </Text>
+            <Text style={styles.humidity}>💧 {item.main.humidity}%</Text>
+          </View>
+        </View>
+      ))}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollView: {
-    flex: 1,
-  },
-  contentContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  container: {
-    maxWidth: MaxContentWidth,
-    flexGrow: 1,
-  },
-  titleContainer: {
-    gap: Spacing.three,
-    alignItems: 'center',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.six,
-  },
-  centerText: {
-    textAlign: 'center',
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  linkButton: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.five,
-    justifyContent: 'center',
-    gap: Spacing.one,
-    alignItems: 'center',
-  },
-  sectionsWrapper: {
-    gap: Spacing.five,
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
-  },
-  collapsibleContent: {
-    alignItems: 'center',
-  },
-  imageTutorial: {
+  container: { flexGrow: 1, alignItems: 'center', backgroundColor: '#1a1a2e', padding: 20, paddingTop: 80 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1a1a2e' },
+  title: { fontSize: 28, fontWeight: 'bold', color: '#fff', marginBottom: 5 },
+  subtitle: { fontSize: 16, color: '#4a90e2', marginBottom: 30 },
+  loadingText: { color: '#aaa', marginTop: 10 },
+  card: {
+    backgroundColor: '#2a2a4a',
+    borderRadius: 16,
+    padding: 20,
     width: '100%',
-    aspectRatio: 296 / 171,
-    borderRadius: Spacing.three,
-    marginTop: Spacing.two,
+    maxWidth: 400,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  imageReact: {
-    width: 100,
-    height: 100,
-    alignSelf: 'center',
-  },
+  cardLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  cardRight: { alignItems: 'flex-end' },
+  emoji: { fontSize: 36 },
+  day: { fontSize: 16, fontWeight: 'bold', color: '#fff' },
+  desc: { fontSize: 13, color: '#aaa', textTransform: 'capitalize', marginTop: 2 },
+  temp: { fontSize: 24, fontWeight: 'bold', color: '#fff' },
+  minmax: { fontSize: 13, color: '#aaa', marginTop: 2 },
+  humidity: { fontSize: 13, color: '#4a90e2', marginTop: 2 },
+  error: { fontSize: 18, color: 'red' },
 });
